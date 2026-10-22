@@ -11,6 +11,8 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -36,7 +38,7 @@ import java.util.List;
  */
 public class MainActivity extends AppCompatActivity {
 
-    private static final String HOME = "www.facebook.com/messages/";
+    private static final String HOME = "https://www.facebook.com/login/?next=https%3A%2F%2Fwww.facebook.com%2Fmessages%2F";
     private static final int MAX_ACCOUNTS = 8;
 
     // কলে আছে কিনা বোঝার স্ক্রিপ্ট। রিটার্ন: "<url>|1" বা "<url>|0"
@@ -117,7 +119,7 @@ public class MainActivity extends AppCompatActivity {
     private void buildUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.WHITE);
+        root.setBackgroundColor(Color.BLACK);
 
         // উপরের সারি: অটো জয়েন, এখনই জয়েন, নতুন আইডি যোগ
         LinearLayout actions = new LinearLayout(this);
@@ -213,13 +215,21 @@ public class MainActivity extends AppCompatActivity {
         s.setSupportMultipleWindows(false);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
-        String ua = s.getUserAgentString()
-                .replace("; wv", "")
-                .replace("Version/4.0 ", "");
-        s.setUserAgentString(ua);
+        s.setUserAgentString("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+        s.setSupportZoom(true);
+        s.setBuiltInZoomControls(true);
+        s.setDisplayZoomControls(false);
 
-        w.setBackgroundColor(Color.BLACK);
-        w.setWebViewClient(new WebViewClient());
+        w.setBackgroundColor(Color.WHITE);
+        w.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    Toast.makeText(MainActivity.this, "পেজ লোড হয়নি: " + error.getDescription(),
+                            Toast.LENGTH_LONG).show();
+                }
+            }
+        });
         w.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
