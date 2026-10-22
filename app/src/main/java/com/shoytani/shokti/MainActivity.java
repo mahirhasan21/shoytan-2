@@ -36,7 +36,7 @@ import java.util.List;
  */
 public class MainActivity extends AppCompatActivity {
 
-    private static final String HOME = "https://www.messenger.com/";
+    private static final String HOME = "www.facebook.com/messages/";
     private static final int MAX_ACCOUNTS = 8;
 
     // কলে আছে কিনা বোঝার স্ক্রিপ্ট। রিটার্ন: "<url>|1" বা "<url>|0"
@@ -117,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
     private void buildUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.BLACK);
+        root.setBackgroundColor(Color.WHITE);
 
         // উপরের সারি: অটো জয়েন, এখনই জয়েন, নতুন আইডি যোগ
         LinearLayout actions = new LinearLayout(this);
