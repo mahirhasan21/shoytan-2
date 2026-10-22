@@ -6,9 +6,11 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -72,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
     private final List<Button> tabButtons = new ArrayList<>();
     private final List<Boolean> inCall = new ArrayList<>();
     private final List<String> currentUrl = new ArrayList<>();
+    private final List<WebView> popups = new ArrayList<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private boolean autoJoin = true;
@@ -188,6 +191,7 @@ public class MainActivity extends AppCompatActivity {
         webs.add(w);
         inCall.add(false);
         currentUrl.add("");
+        popups.add(null);
         holder.addView(w, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         w.loadUrl(HOME);
@@ -200,11 +204,22 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView createWebView(int index) {
         WebView w = new WebView(this);
+        configure(w, index);
+        return w;
+    }
 
+    /** একই আইডির প্রোফাইল দিয়ে WebView সাজানো (মূল পেজ আর কল-পপআপ দুটোর জন্যই) */
+    private void configure(WebView w, final int index) {
         if (multiProfile) {
             String name = "acc" + (index + 1);
             ProfileStore.getInstance().getOrCreateProfile(name);
             WebViewCompat.setProfile(w, name);
+            CookieManager cm = ProfileStore.getInstance().getOrCreateProfile(name).getCookieManager();
+            cm.setAcceptCookie(true);
+            cm.setAcceptThirdPartyCookies(w, true);
+        } else {
+            CookieManager.getInstance().setAcceptCookie(true);
+            CookieManager.getInstance().setAcceptThirdPartyCookies(w, true);
         }
 
         WebSettings s = w.getSettings();
@@ -212,7 +227,7 @@ public class MainActivity extends AppCompatActivity {
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
-        s.setSupportMultipleWindows(false);
+        s.setSupportMultipleWindows(true);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         s.setUserAgentString("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
@@ -235,8 +250,33 @@ public class MainActivity extends AppCompatActivity {
             public void onPermissionRequest(final PermissionRequest request) {
                 runOnUiThread(() -> request.grant(request.getResources()));
             }
+
+            // কল উইন্ডো (popup) এখানে খোলে, একই আইডির লগইন নিয়ে
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog,
+                                          boolean isUserGesture, Message resultMsg) {
+                WebView popup = new WebView(MainActivity.this);
+                configure(popup, index);
+                popups.set(index, popup);
+                holder.addView(popup, new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                select(index);
+                WebView.WebViewTransport t = (WebView.WebViewTransport) resultMsg.obj;
+                t.setWebView(popup);
+                resultMsg.sendToTarget();
+                return true;
+            }
+
+            @Override
+            public void onCloseWindow(WebView window) {
+                holder.removeView(window);
+                if (popups.get(index) == window) {
+                    popups.set(index, null);
+                }
+                window.destroy();
+                select(selected);
+            }
         });
-        return w;
     }
 
     private void select(int index) {
@@ -245,7 +285,8 @@ public class MainActivity extends AppCompatActivity {
         }
         selected = index;
         // সবগুলো WebView VISIBLE থাকে (যাতে পেছনেরগুলোও চলে), শুধু একটা সামনে আনা হয়
-        webs.get(index).bringToFront();
+        WebView top = popups.get(index) != null ? popups.get(index) : webs.get(index);
+        top.bringToFront();
         for (int i = 0; i < tabButtons.size(); i++) {
             tabButtons.get(i).setAlpha(i == index ? 1f : 0.5f);
         }
@@ -258,6 +299,7 @@ public class MainActivity extends AppCompatActivity {
                 pollOne(i);
             }
             updateStatus();
+            flushCookies();
             handler.postDelayed(this, 2500);
         }
     };
@@ -273,7 +315,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             currentUrl.set(i, v.substring(0, bar));
-            boolean now = v.substring(bar + 1).equals("1");
+            boolean now = v.substring(bar + 1).equals("1") || popups.get(i) != null;
             boolean was = inCall.get(i);
             inCall.set(i, now);
 
@@ -317,6 +359,33 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }, 4000);
+    }
+
+    /** লগইন কুকি ফোনে সেভ করে রাখা, যাতে অ্যাপ বন্ধ করে খুললেও লগইন থাকে */
+    private void flushCookies() {
+        try {
+            if (multiProfile) {
+                for (int i = 0; i < webs.size(); i++) {
+                    ProfileStore.getInstance().getOrCreateProfile("acc" + (i + 1))
+                            .getCookieManager().flush();
+                }
+            } else {
+                CookieManager.getInstance().flush();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        flushCookies();
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        flushCookies();
+        super.onStop();
     }
 
     private void updateStatus() {
